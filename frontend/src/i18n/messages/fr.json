@@ -1,0 +1,167 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur est survenue",
+    "success": "Succès",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "back": "Retour",
+    "next": "Suivant",
+    "submit": "Envoyer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "all": "Tous",
+    "none": "Aucun"
+  },
+  "nav": {
+    "home": "Accueil",
+    "board": "Tableau funéraire",
+    "login": "Connexion",
+    "register": "Créer un compte",
+    "logout": "Déconnexion",
+    "settings": "Paramètres",
+    "dashboard": "Tableau de bord"
+  },
+  "auth": {
+    "login": {
+      "title": "Connexion",
+      "subtitle": "Bon retour sur Anchise",
+      "email": "Email",
+      "emailPlaceholder": "vous@exemple.fr",
+      "password": "Mot de passe",
+      "passwordPlaceholder": "••••••••",
+      "forgotPassword": "Mot de passe oublié ?",
+      "submit": "Se connecter",
+      "noAccount": "Pas encore de compte ?",
+      "createAccount": "Créer un compte",
+      "invalidCredentials": "Email ou mot de passe incorrect"
+    },
+    "register": {
+      "title": "Créer un compte",
+      "subtitle": "Rejoignez la communauté Anchise",
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "email": "Email",
+      "password": "Mot de passe",
+      "confirmPassword": "Confirmer le mot de passe",
+      "submit": "Créer mon compte",
+      "hasAccount": "Déjà un compte ?",
+      "signIn": "Se connecter",
+      "passwordRequirements": "Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre",
+      "passwordsMismatch": "Les mots de passe ne correspondent pas",
+      "emailExists": "Un compte existe déjà avec cet email"
+    },
+    "forgotPassword": {
+      "title": "Mot de passe oublié",
+      "subtitle": "Entrez votre email pour recevoir un lien de réinitialisation",
+      "email": "Email",
+      "submit": "Envoyer le lien",
+      "backToLogin": "Retour à la connexion",
+      "emailSent": "Email envoyé",
+      "emailSentMessage": "Si un compte existe avec cet email, vous recevrez un lien de réinitialisation."
+    },
+    "resetPassword": {
+      "title": "Nouveau mot de passe",
+      "subtitle": "Choisissez un nouveau mot de passe sécurisé",
+      "password": "Nouveau mot de passe",
+      "confirmPassword": "Confirmer le mot de passe",
+      "submit": "Réinitialiser le mot de passe",
+      "invalidLink": "Lien invalide",
+      "invalidLinkMessage": "Le lien de réinitialisation est invalide ou expiré.",
+      "requestNewLink": "Demander un nouveau lien",
+      "success": "Mot de passe réinitialisé avec succès"
+    },
+    "checkEmail": {
+      "title": "Vérifiez votre email",
+      "subtitle": "Nous avons envoyé un lien de vérification à",
+      "instructions": "Cliquez sur le lien dans l'email pour vérifier votre compte. Si vous ne le voyez pas, vérifiez vos spams.",
+      "resend": "Renvoyer l'email de vérification",
+      "resent": "Email de vérification renvoyé",
+      "backToLogin": "Retour à la connexion"
+    },
+    "verifyEmail": {
+      "title": "Vérification de l'email",
+      "verifying": "Vérification de votre adresse email...",
+      "success": "Email vérifié avec succès ! Vous pouvez maintenant vous connecter.",
+      "invalidLink": "Le lien de vérification est invalide ou expiré.",
+      "requestNewLink": "Demander un nouveau lien"
+    },
+    "success": {
+      "login": "Connexion réussie",
+      "register": "Compte créé avec succès",
+      "logout": "Déconnexion réussie",
+      "passwordChanged": "Mot de passe modifié avec succès"
+    },
+    "changePassword": {
+      "incorrectCurrent": "Le mot de passe actuel est incorrect"
+    }
+  },
+  "home": {
+    "title": "Rendez hommage à vos proches",
+    "subtitle": "Anchise vous permet de découvrir les avis de décès de votre région, de rendre hommage aux disparus et de préserver leur mémoire.",
+    "exploreBoard": "Explorer le tableau funéraire",
+    "createAccount": "Créer un compte"
+  },
+  "footer": {
+    "copyright": "© {year} Anchise. Tous droits réservés."
+  },
+  "board": {
+    "searchPlaceholder": "Rechercher par nom ou lieu...",
+    "filter": "Filtrer",
+    "map": "Carte",
+    "list": "Liste",
+    "loading": "Chargement des avis...",
+    "resultsCount": "{count, plural, =0 {Aucun résultat} =1 {1 avis trouvé} other {# avis trouvés}}",
+    "noResults": "Aucun avis trouvé",
+    "adjustFilters": "Essayez d'ajuster votre recherche ou vos filtres",
+    "tryDifferentSearch": "Essayez un autre terme de recherche",
+    "errorLoading": "Échec du chargement des avis",
+    "retry": "Réessayer",
+    "last30Days": "30 derniers jours",
+    "nearYou": "Près de vous",
+    "locating": "Localisation..."
+  },
+  "validation": {
+    "required": "Ce champ est requis",
+    "email": "Adresse email invalide",
+    "minLength": "Doit contenir au moins {min} caractères",
+    "maxLength": "Doit contenir au maximum {max} caractères"
+  },
+  "profile": {
+    "notFound": "Profil introuvable",
+    "notFoundDescription": "Le mémorial que vous recherchez n'existe pas ou a été supprimé.",
+    "backToBoard": "Retour au tableau",
+    "yearsOld": "ans",
+    "verifiedProfile": "Profil vérifié géré par un partenaire funéraire",
+    "managedBy": "Géré par {partner}",
+    "lifeStory": "Histoire de vie",
+    "obituary": "Notice nécrologique",
+    "serviceDetails": "Détails du service",
+    "condolences": "Condoléances",
+    "noCondolencesYet": "Pas encore de condoléances",
+    "beFirstToShare": "Soyez le premier à partager un souvenir ou un message.",
+    "loginToLeaveCondolence": "Connectez-vous pour laisser un message de condoléances.",
+    "signIn": "Se connecter",
+    "shareYourMemory": "Partagez un souvenir ou un message",
+    "tributePlaceholder": "Partagez un souvenir, un mot gentil ou vos condoléances...",
+    "sendCondolence": "Envoyer",
+    "tributeSubmitted": "Vos condoléances ont été envoyées",
+    "tributeError": "Échec de l'envoi des condoléances. Veuillez réessayer.",
+    "memorial": "Infos mémorial",
+    "verified": "Vérifié",
+    "yes": "Oui",
+    "no": "Non",
+    "shareMemorial": "Partager",
+    "leaveCondolence": "Laisser des condoléances",
+    "shareDescription": "Partagez ce mémorial avec la famille et les amis.",
+    "copyLink": "Copier le lien",
+    "linkCopied": "Lien copié dans le presse-papiers",
+    "helpBuildMemorial": "Aidez à construire ce mémorial",
+    "helpBuildMemorialDescription": "Cette page de mémorial vient de commencer. La famille et les amis peuvent ajouter des photos, des histoires et des souvenirs pour honorer leur proche.",
+    "inLovingMemory": "En mémoire de {name}",
+    "memorialCreatedWith": "Page de mémorial créée avec Anchise"
+  }
+}
+
