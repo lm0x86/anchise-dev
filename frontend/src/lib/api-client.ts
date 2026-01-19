@@ -21,6 +21,7 @@ interface RefreshResponse {
   tokens: {
     accessToken: string;
     refreshToken: string;
+    expiresIn: string | number;
   };
 }
 
