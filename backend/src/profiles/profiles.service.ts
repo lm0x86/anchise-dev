@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { Prisma, ProfileSource, User } from '@prisma/client';
+import { Prisma, ProfileSource, User, Profile } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateProfileDto,
@@ -387,34 +387,12 @@ export class ProfilesService {
     return `${base}-${random}`;
   }
 
-  private mapToResponse(profile: {
-    id: string;
-    slug: string;
-    firstName: string;
-    lastName: string;
-    birthDate: Date | null;
-    deathDate: Date;
-    sex: string | null;
-    birthPlaceCog: string | null;
-    birthPlaceLabel: string | null;
-    deathPlaceCog: string | null;
-    deathPlaceLabel: string | null;
-    pinLat: number | null;
-    pinLng: number | null;
-    source: ProfileSource;
-    photoUrl: string | null;
-    coverPhotoUrl: string | null;
-    bio: string | null;
-    obituary: string | null;
-    personalityNotes: string | null;
-    serviceDetails: Prisma.JsonValue | null;
-    isLocked: boolean;
-    partnerId: string | null;
-    createdAt: Date;
-    updatedAt: Date;
-    partner?: { name: string } | null;
-    _count?: { tributes: number };
-  }): ProfileResponseDto {
+  private mapToResponse(
+    profile: Profile & {
+      partner?: { name: string } | null;
+      _count?: { tributes: number };
+    },
+  ): ProfileResponseDto {
     return {
       id: profile.id,
       slug: profile.slug,
