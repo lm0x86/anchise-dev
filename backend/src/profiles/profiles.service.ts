@@ -36,7 +36,10 @@ export class ProfilesService {
         pinLat: dto.pinLat,
         pinLng: dto.pinLng,
         photoUrl: dto.photoUrl,
+        coverPhotoUrl: dto.coverPhotoUrl,
+        bio: dto.bio,
         obituary: dto.obituary,
+        personalityNotes: dto.personalityNotes,
         serviceDetails: dto.serviceDetails as Prisma.InputJsonValue,
         source: ProfileSource.PARTNER,
         partnerId,
@@ -234,6 +237,94 @@ export class ProfilesService {
     }));
   }
 
+  /**
+   * Get density aggregation for zoomed-out map view
+   * Groups profiles into grid cells and returns counts
+   */
+  async getDensity(query: {
+    from?: string;
+    to?: string;
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+    precision?: number;
+  }): Promise<{ lat: number; lng: number; count: number }[]> {
+    const { from, to, minLat, maxLat, minLng, maxLng } = query;
+
+    // Calculate precision based on viewport span if not provided
+    const latSpan = maxLat - minLat;
+    let precision = query.precision;
+    if (!precision) {
+      if (latSpan > 30) precision = 2.0;       // Continental: ~220km cells
+      else if (latSpan > 10) precision = 1.0;  // Country: ~110km cells
+      else if (latSpan > 3) precision = 0.5;   // Region: ~55km cells
+      else precision = 0.25;                    // Transition: ~27km cells
+    }
+
+    // Build date filter
+    let dateFilter = '';
+    const params: (string | number)[] = [];
+    let paramIndex = 1;
+
+    if (from) {
+      dateFilter += ` AND death_date >= $${paramIndex}`;
+      params.push(from);
+      paramIndex++;
+    }
+    if (to) {
+      dateFilter += ` AND death_date <= $${paramIndex}`;
+      params.push(to);
+      paramIndex++;
+    }
+
+    // If no date filter provided, default to last 30 days
+    if (!from && !to) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      dateFilter += ` AND death_date >= $${paramIndex}`;
+      params.push(thirtyDaysAgo.toISOString().split('T')[0]);
+      paramIndex++;
+    }
+
+    // Add bounds params
+    params.push(minLat, maxLat, minLng, maxLng, precision);
+
+    // Raw SQL for grid aggregation
+    // FLOOR(coord / precision) * precision gives bottom-left of cell
+    // Adding precision/2 gives center of cell
+    const result = await this.prisma.$queryRawUnsafe<
+      { lat: number; lng: number; count: bigint }[]
+    >(`
+      SELECT 
+        FLOOR(pin_lat / $${paramIndex + 4}) * $${paramIndex + 4} + $${paramIndex + 4} / 2 as lat,
+        FLOOR(pin_lng / $${paramIndex + 4}) * $${paramIndex + 4} + $${paramIndex + 4} / 2 as lng,
+        COUNT(*) as count
+      FROM profiles
+      WHERE suppressed = false
+        AND pin_lat IS NOT NULL
+        AND pin_lng IS NOT NULL
+        AND pin_lat >= $${paramIndex}
+        AND pin_lat <= $${paramIndex + 1}
+        AND pin_lng >= $${paramIndex + 2}
+        AND pin_lng <= $${paramIndex + 3}
+        ${dateFilter}
+      GROUP BY 
+        FLOOR(pin_lat / $${paramIndex + 4}),
+        FLOOR(pin_lng / $${paramIndex + 4})
+      HAVING COUNT(*) > 0
+      ORDER BY count DESC
+      LIMIT 500
+    `, ...params);
+
+    // Convert BigInt to number
+    return result.map((r) => ({
+      lat: Number(r.lat),
+      lng: Number(r.lng),
+      count: Number(r.count),
+    }));
+  }
+
   async update(
     id: string,
     dto: UpdateProfileDto,
@@ -268,7 +359,10 @@ export class ProfilesService {
         ...(dto.deathPlaceCog !== undefined && { deathPlaceCog: dto.deathPlaceCog }),
         ...(dto.deathPlaceLabel !== undefined && { deathPlaceLabel: dto.deathPlaceLabel }),
         ...(dto.photoUrl !== undefined && { photoUrl: dto.photoUrl }),
+        ...(dto.coverPhotoUrl !== undefined && { coverPhotoUrl: dto.coverPhotoUrl }),
+        ...(dto.bio !== undefined && { bio: dto.bio }),
         ...(dto.obituary !== undefined && { obituary: dto.obituary }),
+        ...(dto.personalityNotes !== undefined && { personalityNotes: dto.personalityNotes }),
         ...(dto.serviceDetails !== undefined && { serviceDetails: dto.serviceDetails as Prisma.InputJsonValue }),
         ...(dto.suppressed !== undefined && { suppressed: dto.suppressed }),
       },
@@ -309,7 +403,10 @@ export class ProfilesService {
     pinLng: number | null;
     source: ProfileSource;
     photoUrl: string | null;
+    coverPhotoUrl: string | null;
+    bio: string | null;
     obituary: string | null;
+    personalityNotes: string | null;
     serviceDetails: Prisma.JsonValue | null;
     isLocked: boolean;
     partnerId: string | null;
@@ -334,7 +431,10 @@ export class ProfilesService {
       pinLng: profile.pinLng,
       source: profile.source,
       photoUrl: profile.photoUrl,
+      coverPhotoUrl: profile.coverPhotoUrl,
+      bio: profile.bio,
       obituary: profile.obituary,
+      personalityNotes: profile.personalityNotes,
       serviceDetails: profile.serviceDetails as Record<string, unknown> | null,
       isLocked: profile.isLocked,
       partnerId: profile.partnerId,
@@ -460,7 +560,10 @@ export class ProfilesService {
         pinLat,
         pinLng,
         photoUrl: dto.photoUrl,
+        coverPhotoUrl: dto.coverPhotoUrl,
+        bio: dto.bio,
         obituary: dto.obituary,
+        personalityNotes: dto.personalityNotes,
         serviceDetails: dto.serviceDetails as Prisma.InputJsonValue,
         source: ProfileSource.PARTNER,
         partnerId,
@@ -533,7 +636,10 @@ export class ProfilesService {
         ...(dto.pinLat !== undefined && { pinLat: dto.pinLat }),
         ...(dto.pinLng !== undefined && { pinLng: dto.pinLng }),
         ...(dto.photoUrl !== undefined && { photoUrl: dto.photoUrl }),
+        ...(dto.coverPhotoUrl !== undefined && { coverPhotoUrl: dto.coverPhotoUrl }),
+        ...(dto.bio !== undefined && { bio: dto.bio }),
         ...(dto.obituary !== undefined && { obituary: dto.obituary }),
+        ...(dto.personalityNotes !== undefined && { personalityNotes: dto.personalityNotes }),
         ...(dto.serviceDetails !== undefined && { serviceDetails: dto.serviceDetails as Prisma.InputJsonValue }),
       },
       include: {

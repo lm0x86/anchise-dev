@@ -8,11 +8,13 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import 'leaflet.markercluster';
 import type { BoardProfile } from '@/lib/api';
 
-// Suppress Leaflet's _leaflet_pos error during rapid zoom
+// Suppress noisy development warnings
 if (typeof window !== 'undefined') {
   const originalError = console.error;
   console.error = (...args) => {
-    if (args[0]?.toString?.().includes('_leaflet_pos')) return;
+    const msg = args[0]?.toString?.() || '';
+    // Suppress Leaflet animation errors and React DevTools params warning
+    if (msg.includes('_leaflet_pos') || msg.includes('params are being enumerated')) return;
     originalError.apply(console, args);
   };
   
@@ -61,9 +63,44 @@ const clusterStyles = `
     color: #0F0F12;
   }
   .marker-cluster span {
-    line-height: 30px;
+    display: none;
   }
 `;
+
+// Generate popup content for a profile
+const createPopupContent = (profile: BoardProfile) => {
+  const deathDate = new Date(profile.deathDate).toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return `
+    <div style="font-family: system-ui, sans-serif; min-width: 180px;">
+      <div style="font-weight: 600; font-size: 15px; color: #FFFFFF; margin-bottom: 6px;">
+        ${profile.firstName} ${profile.lastName}
+      </div>
+      <div style="font-size: 12px; color: #AFAFB3; margin-bottom: 4px;">
+        ${deathDate}
+      </div>
+      ${profile.deathPlaceLabel ? `
+        <div style="font-size: 12px; color: #AFAFB3; margin-bottom: 12px;">
+          ${profile.deathPlaceLabel}
+        </div>
+      ` : '<div style="margin-bottom: 8px;"></div>'}
+      <a href="/profile/${profile.slug}" style="
+        display: inline-block;
+        font-size: 12px;
+        color: #C9A75E;
+        text-decoration: none;
+        font-weight: 500;
+        padding: 6px 0;
+        border-top: 1px solid #3A3A40;
+        width: 100%;
+      ">View memorial →</a>
+    </div>
+  `;
+};
 
 // Custom marker with Anchise colors
 const createAnchorIcon = () => L.divIcon({
@@ -90,12 +127,21 @@ export interface MapBounds {
   maxLng: number;
 }
 
+export interface MapPosition {
+  lat: number;
+  lng: number;
+  zoom: number;
+}
+
 interface BoardMapProps {
   profiles: BoardProfile[];
   onProfileClick?: (profile: BoardProfile) => void;
   onBoundsChange?: (bounds: MapBounds) => void;
+  onMapMove?: (position: MapPosition) => void;
   selectedProfileId?: string | null;
-  centerOn?: { lat: number; lng: number } | null;
+  popupTrigger?: number;
+  centerOn?: { lat: number; lng: number; zoom?: number } | null;
+  initialPosition?: MapPosition | null;
   userLocation?: { lat: number; lng: number } | null;
   className?: string;
 }
@@ -109,8 +155,11 @@ export function BoardMap({
   profiles, 
   onProfileClick, 
   onBoundsChange,
+  onMapMove,
   selectedProfileId,
+  popupTrigger,
   centerOn,
+  initialPosition,
   userLocation, 
   className 
 }: BoardMapProps) {
@@ -118,15 +167,19 @@ export function BoardMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
+  const markersMapRef = useRef<Map<string, L.Marker>>(new Map());
   const stylesAddedRef = useRef(false);
   const initializedWithLocationRef = useRef(false);
   const onBoundsChangeRef = useRef(onBoundsChange);
+  const onMapMoveRef = useRef(onMapMove);
   const userLocationRef = useRef(userLocation);
+  const initialPositionRef = useRef(initialPosition);
   const [isMapReady, setIsMapReady] = useState(false);
 
   // Keep refs updated
   useEffect(() => {
     onBoundsChangeRef.current = onBoundsChange;
+    onMapMoveRef.current = onMapMove;
   }, [onBoundsChange]);
 
   useEffect(() => {
@@ -145,16 +198,18 @@ export function BoardMap({
   // Stable emit bounds callback - uses ref to avoid re-creating
   const emitBounds = useCallback(() => {
     const map = mapRef.current;
-    if (!map || !onBoundsChangeRef.current) return;
+    if (!map) return;
     
     try {
       const bounds = map.getBounds();
-      onBoundsChangeRef.current({
-        minLat: bounds.getSouth(),
-        maxLat: bounds.getNorth(),
-        minLng: bounds.getWest(),
-        maxLng: bounds.getEast(),
-      });
+      if (onBoundsChangeRef.current) {
+        onBoundsChangeRef.current({
+          minLat: bounds.getSouth(),
+          maxLat: bounds.getNorth(),
+          minLng: bounds.getWest(),
+          maxLng: bounds.getEast(),
+        });
+      }
     } catch {
       // Map not ready yet, ignore
     }
@@ -174,12 +229,19 @@ export function BoardMap({
         return;
       }
 
-      // Use user location if available, otherwise world view
+      // Priority: 1) URL position, 2) user location, 3) world view
+      const urlPos = initialPositionRef.current;
       const loc = userLocationRef.current;
-      const center: [number, number] = loc 
-        ? [loc.lat, loc.lng] 
-        : WORLD_CENTER;
-      const zoom = loc ? USER_ZOOM : WORLD_ZOOM;
+      const center: [number, number] = urlPos 
+        ? [urlPos.lat, urlPos.lng]
+        : loc 
+          ? [loc.lat, loc.lng] 
+          : WORLD_CENTER;
+      const zoom = urlPos 
+        ? urlPos.zoom 
+        : loc 
+          ? USER_ZOOM 
+          : WORLD_ZOOM;
 
       const map = L.map(container, {
         center,
@@ -203,7 +265,7 @@ export function BoardMap({
         maxZoom: 19,
       }).addTo(map);
 
-      // Create cluster group
+      // Create cluster group for profile markers
       const clusterGroup = L.markerClusterGroup({
         maxClusterRadius: 50,
         spiderfyOnMaxZoom: true,
@@ -215,12 +277,49 @@ export function BoardMap({
       clusterGroupRef.current = clusterGroup;
 
       mapRef.current = map;
-      initializedWithLocationRef.current = !!userLocationRef.current;
+      initializedWithLocationRef.current = !!userLocationRef.current || !!urlPos;
       setIsMapReady(true);
 
+      // Track if user has interacted with the map (vs programmatic positioning)
+      let userHasInteracted = false;
+      let interactionTimeout: ReturnType<typeof setTimeout> | null = null;
+      
+      // Mark user interaction on drag/zoom start
+      map.on('dragstart', () => { userHasInteracted = true; });
+      map.on('zoomstart', () => { 
+        // Only count as user interaction if not from programmatic setView
+        // Small delay to allow programmatic zooms to clear the flag
+        if (interactionTimeout) clearTimeout(interactionTimeout);
+        interactionTimeout = setTimeout(() => { userHasInteracted = true; }, 50);
+      });
+
+      // Emit map position for URL sync (only after user interaction)
+      const emitMapPosition = () => {
+        if (!userHasInteracted) return;
+        try {
+          const center = map.getCenter();
+          const zoom = map.getZoom();
+          if (onMapMoveRef.current) {
+            onMapMoveRef.current({
+              lat: center.lat,
+              lng: center.lng,
+              zoom,
+            });
+          }
+        } catch {
+          // Map not ready yet
+        }
+      };
+
       // Listen for map movements
-      map.on('moveend', emitBounds);
-      map.on('zoomend', emitBounds);
+      map.on('moveend', () => {
+        emitBounds();
+        emitMapPosition();
+      });
+      map.on('zoomend', () => {
+        emitBounds();
+        emitMapPosition();
+      });
 
       // Emit initial bounds
       setTimeout(emitBounds, 50);
@@ -265,6 +364,7 @@ export function BoardMap({
 
     // Clear existing markers
     clusterGroup.clearLayers();
+    markersMapRef.current.clear();
 
     // Add new markers
     profiles.forEach((profile) => {
@@ -274,33 +374,38 @@ export function BoardMap({
         icon: createAnchorIcon(),
       });
 
-      // Create popup content
-      const deathDate = new Date(profile.deathDate).toLocaleDateString('en-US', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
-
-      const popupContent = `
-        <div style="font-family: system-ui, sans-serif; min-width: 160px; padding: 4px;">
-          <div style="font-weight: 600; font-size: 14px; color: #1A1A1F; margin-bottom: 4px;">
-            ${profile.firstName} ${profile.lastName}
-          </div>
-          <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
-            ${deathDate}
-            ${profile.deathPlaceLabel ? `<br/>${profile.deathPlaceLabel}` : ''}
-          </div>
-          <a href="/profile/${profile.slug}" style="font-size: 12px; color: #C9A75E; text-decoration: none; font-weight: 500;">
-            View memorial →
-          </a>
-        </div>
-      `;
-
-      marker.bindPopup(popupContent, { closeButton: true });
+      marker.bindPopup(createPopupContent(profile), { closeButton: true });
       marker.on('click', () => onProfileClick?.(profile));
       clusterGroup.addLayer(marker);
+      
+      // Store marker reference by profile ID
+      markersMapRef.current.set(profile.id, marker);
     });
   }, [profiles, onProfileClick, isMapReady]);
+
+  // Store profiles in a ref for popup access
+  const profilesRef = useRef(profiles);
+  useEffect(() => {
+    profilesRef.current = profiles;
+  }, [profiles]);
+
+  // Open popup when a profile is selected from the list
+  useEffect(() => {
+    if (!selectedProfileId || !isMapReady) return;
+    
+    const map = mapRef.current;
+    if (!map) return;
+    
+    // Find the profile data from ref
+    const profile = profilesRef.current.find(p => p.id === selectedProfileId);
+    if (!profile || profile.pinLat === null || profile.pinLng === null) return;
+    
+    // Open popup directly on the map at the profile's location
+    L.popup()
+      .setLatLng([profile.pinLat, profile.pinLng])
+      .setContent(createPopupContent(profile))
+      .openOn(map);
+  }, [selectedProfileId, popupTrigger, isMapReady]);
 
   // Add/update user location marker
   useEffect(() => {
@@ -336,7 +441,8 @@ export function BoardMap({
     if (!map || !centerOn || !isMapReady) return;
     
     try {
-      map.setView([centerOn.lat, centerOn.lng], 14, { animate: true });
+      const zoom = centerOn.zoom ?? 11; // Use provided zoom or default to 11 (moderate zoom)
+      map.setView([centerOn.lat, centerOn.lng], zoom, { animate: true });
     } catch {
       // Map may be in transition, ignore
     }

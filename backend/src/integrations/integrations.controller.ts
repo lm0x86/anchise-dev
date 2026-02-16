@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Body,
+  Param,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -18,7 +19,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { InseeSyncService } from './insee';
+import { InseeSyncService, InseeFileSyncService } from './insee';
 
 // ============================================
 // DTOs
@@ -54,22 +55,25 @@ class SyncYearDto {
 @Roles('ADMIN')
 @ApiBearerAuth()
 export class IntegrationsController {
-  constructor(private readonly inseeSyncService: InseeSyncService) {}
+  constructor(
+    private readonly inseeSyncService: InseeSyncService,
+    private readonly inseeFileSyncService: InseeFileSyncService,
+  ) {}
 
   // ============================================
-  // INSEE Endpoints
+  // INSEE API-based Endpoints (matchID)
   // ============================================
 
   @Get('insee/status')
   @ApiOperation({ summary: 'Get INSEE sync status and recent jobs' })
   @ApiResponse({ status: 200, description: 'Sync status retrieved' })
   async getInseeStatus() {
-    return this.inseeSyncService.getSyncStatus();
+    return this.inseeFileSyncService.getSyncStatus();
   }
 
   @Post('insee/sync/month')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Sync a specific month from INSEE/matchID' })
+  @ApiOperation({ summary: 'Sync a specific month from INSEE/matchID API' })
   @ApiResponse({ status: 200, description: 'Sync completed' })
   @ApiResponse({ status: 409, description: 'Sync already in progress' })
   async syncInseeMonth(@Body() dto: SyncMonthDto) {
@@ -82,7 +86,7 @@ export class IntegrationsController {
 
   @Post('insee/sync/year')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Sync a full year from INSEE/matchID (initial load)' })
+  @ApiOperation({ summary: 'Sync a full year from INSEE/matchID API (initial load)' })
   @ApiResponse({ status: 200, description: 'Sync completed' })
   @ApiResponse({ status: 409, description: 'Sync already in progress' })
   async syncInseeYear(@Body() dto: SyncYearDto) {
@@ -98,10 +102,83 @@ export class IntegrationsController {
   @ApiOperation({ summary: 'Stop the current INSEE sync job' })
   @ApiResponse({ status: 200, description: 'Stop signal sent' })
   async stopInseeSync() {
-    const result = await this.inseeSyncService.stopSync();
+    // Try both services
+    let result = await this.inseeFileSyncService.stopSync();
+    if (!result.stopped) {
+      result = await this.inseeSyncService.stopSync();
+    }
     return {
       message: result.stopped ? 'Stop signal sent' : 'No sync in progress',
       ...result,
+    };
+  }
+
+  // ============================================
+  // INSEE Direct File Sync (from insee.fr)
+  // ============================================
+
+  @Get('insee/files')
+  @ApiOperation({ summary: 'List local INSEE files available for processing' })
+  @ApiResponse({ status: 200, description: 'File list retrieved' })
+  async listLocalFiles() {
+    const files = await this.inseeFileSyncService.getLocalFiles();
+    return { files };
+  }
+
+  @Get('insee/files/check')
+  @ApiOperation({ summary: 'Check INSEE website for new files' })
+  @ApiResponse({ status: 200, description: 'New files list' })
+  async checkForNewFiles() {
+    const newFiles = await this.inseeFileSyncService.checkForNewFiles();
+    return {
+      count: newFiles.length,
+      files: newFiles,
+    };
+  }
+
+  @Post('insee/files/sync/:fileName')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sync a specific local INSEE file' })
+  @ApiResponse({ status: 200, description: 'Sync started/completed' })
+  @ApiResponse({ status: 404, description: 'File not found' })
+  @ApiResponse({ status: 409, description: 'Sync already in progress' })
+  async syncLocalFile(@Param('fileName') fileName: string) {
+    const result = await this.inseeFileSyncService.syncLocalFile(fileName);
+    return {
+      message: 'Sync completed',
+      ...result,
+    };
+  }
+
+  @Post('insee/files/download')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Download and sync new files from INSEE website' })
+  @ApiResponse({ status: 200, description: 'Download and sync started' })
+  async downloadAndSyncNewFiles() {
+    const newFiles = await this.inseeFileSyncService.checkForNewFiles();
+
+    if (newFiles.length === 0) {
+      return {
+        message: 'No new files found',
+        processed: 0,
+      };
+    }
+
+    // Process only the most recent monthly file to avoid long-running operations
+    const monthlyFiles = newFiles.filter((f) => f.type === 'monthly');
+    if (monthlyFiles.length > 0) {
+      const mostRecent = monthlyFiles[0];
+      const result = await this.inseeFileSyncService.downloadAndProcessFile(mostRecent);
+      return {
+        message: 'Sync completed',
+        ...result,
+      };
+    }
+
+    return {
+      message: 'No monthly files to process',
+      processed: 0,
+      availableAnnual: newFiles.filter((f) => f.type === 'annual').length,
     };
   }
 }

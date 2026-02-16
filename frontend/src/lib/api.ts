@@ -149,6 +149,12 @@ export interface BoardProfile {
   photoUrl: string | null;
 }
 
+export interface DensityPoint {
+  lat: number;
+  lng: number;
+  count: number;
+}
+
 export interface ProfileListResponse {
   profiles: Profile[];
   total: number;
@@ -197,6 +203,23 @@ export const profilesApi = {
     }
     const query = searchParams.toString();
     return request<BoardProfile[]>(`/profiles/board${query ? `?${query}` : ''}`);
+  },
+
+  getDensity: (params: {
+    from?: string;
+    to?: string;
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+    precision?: number;
+  }) => {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) searchParams.append(key, String(value));
+    });
+    const query = searchParams.toString();
+    return request<DensityPoint[]>(`/profiles/board/density?${query}`);
   },
 
   get: (idOrSlug: string) =>

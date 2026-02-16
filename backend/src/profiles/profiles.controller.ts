@@ -25,6 +25,8 @@ import {
   ProfileResponseDto,
   ProfileListResponseDto,
   BoardProfileDto,
+  DensityQueryDto,
+  DensityPointDto,
 } from './dto/profile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -58,6 +60,13 @@ export class ProfilesController {
   @ApiResponse({ status: 200, description: 'Board profiles', type: [BoardProfileDto] })
   async findForBoard(@Query() query: ProfileQueryDto): Promise<BoardProfileDto[]> {
     return this.profilesService.findForBoard(query);
+  }
+
+  @Get('board/density')
+  @ApiOperation({ summary: 'Get density aggregation for zoomed-out map view' })
+  @ApiResponse({ status: 200, description: 'Density grid points', type: [DensityPointDto] })
+  async getDensity(@Query() query: DensityQueryDto): Promise<DensityPointDto[]> {
+    return this.profilesService.getDensity(query);
   }
 
   @Get(':idOrSlug')

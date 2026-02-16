@@ -108,7 +108,7 @@
     "copyright": "© {year} Anchise. Tous droits réservés."
   },
   "board": {
-    "searchPlaceholder": "Rechercher par nom ou lieu...",
+    "searchPlaceholder": "Rechercher par nom...",
     "filter": "Filtrer",
     "map": "Carte",
     "list": "Liste",

@@ -26,6 +26,8 @@ model User {
   // Relations
   tributes     Tribute[]
   partnerUsers PartnerUser[]
+  memories     Memory[]
+  prayers      Prayer[]
 
   @@map("users")
 }
@@ -127,10 +129,15 @@ model Profile {
   partnerId String?  @map("partner_id")
   partner   Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
 
-  // Content
+  // Content - Basic
   photoUrl       String? @map("photo_url")
+  coverPhotoUrl  String? @map("cover_photo_url")
+  bio            String? @db.Text
   obituary       String? @db.Text
   serviceDetails Json?   @map("service_details")
+  
+  // Content - Personality
+  personalityNotes String? @map("personality_notes") @db.Text
 
   // State
   isLocked   Boolean   @default(false) @map("is_locked")
@@ -141,9 +148,30 @@ model Profile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
+  // Relations - Existing
   tributes Tribute[]
   viewLogs ProfileViewLog[]
+  
+  // Relations - My Story
+  timelineEvents TimelineEvent[]
+  memories       Memory[]
+  albums         Album[]
+  
+  // Relations - Values
+  values         ProfileValue[]
+  favorites      ProfileFavorite[]
+  quotes         ProfileQuote[]
+  funFacts       FunFact[]
+  bucketList     BucketListItem[]
+  
+  // Relations - Legacy
+  achievements   Achievement[]
+  causes         Cause[]
+  creations      Creation[]
+  futureMessage  FutureMessage?
+  
+  // Relations - Memorial
+  prayers        Prayer[]
 
   // Indexes for performance
   @@index([deathDate])
@@ -151,6 +179,7 @@ model Profile {
   @@index([lastName, firstName])
   @@index([partnerId])
   @@index([source])
+  @@unique([inseeNumActe]) // Prevent duplicate INSEE imports
   @@map("profiles")
 }
 
@@ -163,6 +192,80 @@ enum ProfileSource {
   PARTNER
   INSEE
   MERGED
+}
+
+// ============================================
+// PROFILE CONTENT ENUMS
+// ============================================
+
+enum Visibility {
+  FAMILY
+  FRIENDS
+  PUBLIC
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+}
+
+enum AlbumType {
+  PHOTOS
+  VIDEOS
+  REELS
+  MIXED
+}
+
+enum MemoryType {
+  TEXT
+  PHOTO
+  AUDIO
+  VIDEO
+}
+
+enum FavoriteCategory {
+  BOOK
+  FILM
+  MUSIC
+  FOOD
+  PLACE
+  PERSON
+}
+
+enum AchievementCategory {
+  PROFESSIONAL
+  PERSONAL
+}
+
+enum CauseType {
+  CHARITY
+  VOLUNTEER
+  PHILOSOPHY
+}
+
+enum CreationType {
+  ART
+  WRITING
+  MUSIC
+  PATENT
+  OTHER
+}
+
+enum PrayerSymbol {
+  CANDLE
+  STAR
+  FLOWER
+  HEART
+  DOVE
+  CROSS
+}
+
+enum ContentStatus {
+  PENDING
+  APPROVED
+  HIDDEN
+  REMOVED
 }
 
 // ============================================
@@ -199,6 +302,284 @@ enum TributeStatus {
   APPROVED
   HIDDEN
   REMOVED
+}
+
+// ============================================
+// MY STORY - TIMELINE & MEMORIES
+// ============================================
+
+model TimelineEvent {
+  id          String   @id @default(cuid())
+  profileId   String   @map("profile_id")
+  title       String
+  description String?  @db.Text
+  date        DateTime @db.Date
+  mediaUrl    String?  @map("media_url")
+  sortOrder   Int      @default(0) @map("sort_order")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId, date])
+  @@index([profileId, sortOrder])
+  @@map("timeline_events")
+}
+
+model Memory {
+  id          String        @id @default(cuid())
+  profileId   String        @map("profile_id")
+  authorId    String        @map("author_id")
+  content     String?       @db.Text
+  type        MemoryType    @default(TEXT)
+  visibility  Visibility    @default(PUBLIC)
+  status      ContentStatus @default(PENDING)
+  
+  // Moderation
+  moderatedBy String?       @map("moderated_by")
+  moderatedAt DateTime?     @map("moderated_at")
+  
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  
+  profile     Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  author      User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  mediaItems  MediaItem[]
+  
+  @@index([profileId, status])
+  @@index([authorId])
+  @@index([visibility])
+  @@map("memories")
+}
+
+model Album {
+  id          String    @id @default(cuid())
+  profileId   String    @map("profile_id")
+  title       String
+  description String?   @db.Text
+  coverUrl    String?   @map("cover_url")
+  type        AlbumType @default(PHOTOS)
+  sortOrder   Int       @default(0) @map("sort_order")
+  
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaItems  MediaItem[]
+  
+  @@index([profileId])
+  @@map("albums")
+}
+
+model MediaItem {
+  id        String    @id @default(cuid())
+  albumId   String?   @map("album_id")
+  memoryId  String?   @map("memory_id")
+  url       String
+  type      MediaType
+  caption   String?
+  sortOrder Int       @default(0) @map("sort_order")
+  
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  album     Album?    @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  memory    Memory?   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  
+  @@index([albumId])
+  @@index([memoryId])
+  @@map("media_items")
+}
+
+// ============================================
+// VALUES & PERSONALITY
+// ============================================
+
+model ProfileValue {
+  id        String   @id @default(cuid())
+  profileId String   @map("profile_id")
+  value     String
+  meaning   String?  @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId])
+  @@map("profile_values")
+}
+
+model ProfileFavorite {
+  id        String           @id @default(cuid())
+  profileId String           @map("profile_id")
+  category  FavoriteCategory
+  title     String
+  note      String?          @db.Text
+  sortOrder Int              @default(0) @map("sort_order")
+  
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  
+  profile   Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId, category])
+  @@map("profile_favorites")
+}
+
+model ProfileQuote {
+  id          String   @id @default(cuid())
+  profileId   String   @map("profile_id")
+  text        String   @db.Text
+  attribution String?
+  audioUrl    String?  @map("audio_url")
+  sortOrder   Int      @default(0) @map("sort_order")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId])
+  @@map("profile_quotes")
+}
+
+model FunFact {
+  id        String   @id @default(cuid())
+  profileId String   @map("profile_id")
+  fact      String   @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId])
+  @@map("fun_facts")
+}
+
+model BucketListItem {
+  id            String    @id @default(cuid())
+  profileId     String    @map("profile_id")
+  item          String
+  isCompleted   Boolean   @default(false) @map("is_completed")
+  completedDate DateTime? @map("completed_date") @db.Date
+  sortOrder     Int       @default(0) @map("sort_order")
+  
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  profile       Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId])
+  @@map("bucket_list_items")
+}
+
+// ============================================
+// LEGACY - ACHIEVEMENTS & IMPACT
+// ============================================
+
+model Achievement {
+  id          String              @id @default(cuid())
+  profileId   String              @map("profile_id")
+  title       String
+  description String?             @db.Text
+  category    AchievementCategory
+  date        DateTime?           @db.Date
+  mediaUrl    String?             @map("media_url")
+  sortOrder   Int                 @default(0) @map("sort_order")
+  
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  
+  profile     Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId, category])
+  @@map("achievements")
+}
+
+model Cause {
+  id          String    @id @default(cuid())
+  profileId   String    @map("profile_id")
+  name        String
+  description String?   @db.Text
+  type        CauseType
+  externalUrl String?   @map("external_url")
+  sortOrder   Int       @default(0) @map("sort_order")
+  
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId])
+  @@map("causes")
+}
+
+model Creation {
+  id          String       @id @default(cuid())
+  profileId   String       @map("profile_id")
+  title       String
+  description String?      @db.Text
+  type        CreationType
+  mediaUrl    String?      @map("media_url")
+  externalUrl String?      @map("external_url")
+  sortOrder   Int          @default(0) @map("sort_order")
+  
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  
+  profile     Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId])
+  @@map("creations")
+}
+
+model FutureMessage {
+  id        String   @id @default(cuid())
+  profileId String   @unique @map("profile_id")
+  content   String?  @db.Text
+  audioUrl  String?  @map("audio_url")
+  videoUrl  String?  @map("video_url")
+  isPinned  Boolean  @default(true) @map("is_pinned")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@map("future_messages")
+}
+
+// ============================================
+// MEMORIAL - PRAYERS
+// ============================================
+
+model Prayer {
+  id          String        @id @default(cuid())
+  profileId   String        @map("profile_id")
+  authorId    String        @map("author_id")
+  content     String?       @db.Text
+  audioUrl    String?       @map("audio_url")
+  symbol      PrayerSymbol?
+  visibility  Visibility    @default(PUBLIC)
+  status      ContentStatus @default(PENDING)
+  
+  // Moderation
+  moderatedBy String?       @map("moderated_by")
+  moderatedAt DateTime?     @map("moderated_at")
+  
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  
+  profile     Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  author      User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId, status])
+  @@index([authorId])
+  @@map("prayers")
 }
 
 // ============================================

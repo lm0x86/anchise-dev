@@ -2,7 +2,10 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, CheckCircle2, XCircle, Loader2, Calendar, StopCircle, Ban } from 'lucide-react';
+import { 
+  RefreshCw, CheckCircle2, XCircle, Loader2, Calendar, StopCircle, Ban,
+  Download, FileArchive, Globe, HardDrive, Search
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useAccessToken } from '@/store/auth';
 import { Button } from '@/components/ui/button';
@@ -14,6 +17,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
@@ -32,9 +41,25 @@ interface InseeJob {
   completedAt: string | null;
 }
 
+interface LocalFile {
+  fileName: string;
+  size: number;
+  processed: boolean;
+}
+
+interface NewFileInfo {
+  fileName: string;
+  url: string;
+  month: string;
+  year: string;
+  type: 'monthly' | 'annual' | 'decennial';
+}
+
 interface InseeStatus {
   isSyncing: boolean;
+  currentJobId: string | null;
   totalInseeProfiles: number;
+  localFiles: LocalFile[];
   recentJobs: InseeJob[];
 }
 
@@ -84,6 +109,58 @@ async function stopSync(token: string): Promise<unknown> {
   }
 
   return response.json();
+}
+
+async function checkForNewFiles(token: string): Promise<{ count: number; files: NewFileInfo[] }> {
+  const response = await fetch(`${API_URL}/admin/integrations/insee/files/check`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to check for new files');
+  }
+
+  return response.json();
+}
+
+async function syncLocalFile(token: string, fileName: string): Promise<unknown> {
+  const response = await fetch(`${API_URL}/admin/integrations/insee/files/sync/${encodeURIComponent(fileName)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Sync failed');
+  }
+
+  return response.json();
+}
+
+async function downloadAndSyncNew(token: string): Promise<unknown> {
+  const response = await fetch(`${API_URL}/admin/integrations/insee/files/download`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Download failed');
+  }
+
+  return response.json();
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatDuration(ms: number): string {
@@ -153,6 +230,7 @@ export default function IntegrationsPage() {
   const queryClient = useQueryClient();
   const [selectedYear, setSelectedYear] = useState(currentYear.toString());
   const [selectedMonth, setSelectedMonth] = useState('12');
+  const [newFilesData, setNewFilesData] = useState<{ count: number; files: NewFileInfo[] } | null>(null);
 
   const { data: status, isLoading } = useQuery({
     queryKey: ['admin', 'insee', 'status', token],
@@ -177,6 +255,44 @@ export default function IntegrationsPage() {
     mutationFn: () => stopSync(token!),
     onSuccess: () => {
       toast.success('Stop signal sent - sync will stop after current batch');
+      queryClient.invalidateQueries({ queryKey: ['admin', 'insee', 'status'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const checkFilesMutation = useMutation({
+    mutationFn: () => checkForNewFiles(token!),
+    onSuccess: (data) => {
+      setNewFilesData(data);
+      if (data.count === 0) {
+        toast.info('No new files available on INSEE website');
+      } else {
+        toast.success(`Found ${data.count} new file(s) available`);
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const syncLocalFileMutation = useMutation({
+    mutationFn: (fileName: string) => syncLocalFile(token!, fileName),
+    onSuccess: () => {
+      toast.success('File sync completed');
+      queryClient.invalidateQueries({ queryKey: ['admin', 'insee', 'status'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const downloadSyncMutation = useMutation({
+    mutationFn: () => downloadAndSyncNew(token!),
+    onSuccess: () => {
+      toast.success('Download and sync completed');
+      setNewFilesData(null);
       queryClient.invalidateQueries({ queryKey: ['admin', 'insee', 'status'] });
     },
     onError: (error: Error) => {
@@ -211,9 +327,9 @@ export default function IntegrationsPage() {
                 <RefreshCw className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold">INSEE / matchID</h2>
+                <h2 className="text-lg font-semibold">INSEE Death Records</h2>
                 <p className="text-sm text-muted-foreground">
-                  French national death records
+                  French national death records from insee.fr
                 </p>
               </div>
             </div>
@@ -226,56 +342,213 @@ export default function IntegrationsPage() {
           </div>
         </div>
 
-        {/* Sync Form */}
-        <div className="p-6 border-b border-border bg-accent/30">
-          <h3 className="font-medium mb-4">Sync Data</h3>
-          <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <Label>Year</Label>
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-32 mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {years.map((year) => (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Month</Label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-40 mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map((month) => (
-                    <SelectItem key={month.value} value={month.value}>
-                      {month.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              onClick={handleSync}
-              disabled={syncMutation.isPending || status?.isSyncing}
-            >
-              {(syncMutation.isPending || status?.isSyncing) ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Calendar className="w-4 h-4 mr-2" />
-              )}
-              Sync {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
-            </Button>
+        {/* Sync Methods Tabs */}
+        <Tabs defaultValue="direct" className="w-full">
+          <div className="border-b border-border px-6 pt-4">
+            <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsTrigger value="direct" className="gap-2">
+                <Globe className="w-4 h-4" />
+                Direct from INSEE
+              </TabsTrigger>
+              <TabsTrigger value="api" className="gap-2">
+                <RefreshCw className="w-4 h-4" />
+                matchID API
+              </TabsTrigger>
+            </TabsList>
           </div>
-          <p className="text-sm text-muted-foreground mt-3">
-            Imports death records for the selected month from the French national registry (via matchID API).
-          </p>
-        </div>
+
+          {/* Direct INSEE Sync Tab */}
+          <TabsContent value="direct" className="mt-0">
+            <div className="p-6 border-b border-border bg-accent/30">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="font-medium">Sync from INSEE Website</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Download official death record files directly from insee.fr. Files are checked daily at 4 AM.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => checkFilesMutation.mutate()}
+                    disabled={checkFilesMutation.isPending || status?.isSyncing}
+                  >
+                    {checkFilesMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4 mr-2" />
+                    )}
+                    Check for New Files
+                  </Button>
+                  {newFilesData && newFilesData.count > 0 && (
+                    <Button
+                      onClick={() => downloadSyncMutation.mutate()}
+                      disabled={downloadSyncMutation.isPending || status?.isSyncing}
+                    >
+                      {downloadSyncMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4 mr-2" />
+                      )}
+                      Download & Sync
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* New Files Available */}
+              {newFilesData && newFilesData.count > 0 && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-4">
+                  <h4 className="font-medium text-green-600 mb-2">
+                    {newFilesData.count} New File(s) Available
+                  </h4>
+                  <div className="space-y-2">
+                    {newFilesData.files.slice(0, 5).map((file) => (
+                      <div key={file.fileName} className="flex items-center justify-between text-sm">
+                        <span className="font-mono">{file.fileName}</span>
+                        <span className="text-muted-foreground">
+                          {file.type === 'monthly' ? `${file.month}` : file.year}
+                        </span>
+                      </div>
+                    ))}
+                    {newFilesData.files.length > 5 && (
+                      <p className="text-sm text-muted-foreground">
+                        ...and {newFilesData.files.length - 5} more
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Local Files */}
+              {status?.localFiles && status.localFiles.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <HardDrive className="w-4 h-4" />
+                    Local Files ({status.localFiles.length})
+                  </h4>
+                  <div className="bg-card border border-border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/50">
+                          <th className="text-left py-2 px-4 font-medium">File Name</th>
+                          <th className="text-right py-2 px-4 font-medium">Size</th>
+                          <th className="text-center py-2 px-4 font-medium">Status</th>
+                          <th className="text-right py-2 px-4 font-medium">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {status.localFiles.map((file) => (
+                          <tr key={file.fileName} className="border-b border-border/50">
+                            <td className="py-2 px-4">
+                              <div className="flex items-center gap-2">
+                                <FileArchive className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-mono text-xs">{file.fileName}</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-4 text-right text-muted-foreground">
+                              {formatFileSize(file.size)}
+                            </td>
+                            <td className="py-2 px-4 text-center">
+                              {file.processed ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-500/10 text-green-500">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Processed
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-yellow-500/10 text-yellow-500">
+                                  Pending
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-4 text-right">
+                              {!file.processed && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => syncLocalFileMutation.mutate(file.fileName)}
+                                  disabled={syncLocalFileMutation.isPending || status?.isSyncing}
+                                >
+                                  {syncLocalFileMutation.isPending ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    'Process'
+                                  )}
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {(!status?.localFiles || status.localFiles.length === 0) && (
+                <div className="text-center py-8 text-muted-foreground border border-dashed border-border rounded-lg">
+                  <FileArchive className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>No local files found in sync-data directory</p>
+                  <p className="text-sm mt-1">Click "Check for New Files" to find available downloads</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* matchID API Tab */}
+          <TabsContent value="api" className="mt-0">
+            <div className="p-6 border-b border-border bg-accent/30">
+              <h3 className="font-medium mb-4">Sync via matchID API</h3>
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <Label>Year</Label>
+                  <Select value={selectedYear} onValueChange={setSelectedYear}>
+                    <SelectTrigger className="w-32 mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((year) => (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Month</Label>
+                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger className="w-40 mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {months.map((month) => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={handleSync}
+                  disabled={syncMutation.isPending || status?.isSyncing}
+                >
+                  {(syncMutation.isPending || status?.isSyncing) ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Calendar className="w-4 h-4 mr-2" />
+                  )}
+                  Sync {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground mt-3">
+                Imports death records for the selected month from the French national registry via the matchID API.
+                This method is slower but provides geocoded coordinates.
+              </p>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         {/* Active Job Progress */}
         {status?.recentJobs.find((j) => j.status === 'RUNNING') && (

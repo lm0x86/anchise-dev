@@ -4,7 +4,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 
 // INSEE integration
-import { InseeService, InseeSyncService } from './insee';
+import { InseeService, InseeSyncService, InseeFileSyncService } from './insee';
 
 // Controller
 import { IntegrationsController } from './integrations.controller';
@@ -19,12 +19,14 @@ import { IntegrationsController } from './integrations.controller';
     // INSEE
     InseeService,
     InseeSyncService,
+    InseeFileSyncService,
     // Future integrations go here...
   ],
   controllers: [IntegrationsController],
   exports: [
     InseeService,
     InseeSyncService,
+    InseeFileSyncService,
   ],
 })
 export class IntegrationsModule {}

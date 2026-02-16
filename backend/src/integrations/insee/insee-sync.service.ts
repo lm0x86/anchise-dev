@@ -19,6 +19,9 @@ export class InseeSyncService implements OnModuleInit {
   private isSyncing = false;
   private shouldStop = false;
   private currentJobId: string | null = null;
+  
+  // Spread radius in degrees (~200-300 meters at French latitudes)
+  private readonly SPREAD_RADIUS = 0.003;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -343,6 +346,12 @@ export class InseeSyncService implements OnModuleInit {
     const birthPlaceLabel = this.extractCity(person.birth.location?.city);
     const deathPlaceLabel = this.extractCity(person.death.location?.city);
 
+    // Apply jitter to coordinates to spread markers visually
+    const baseCoords = person.death.location?.latitude && person.death.location?.longitude
+      ? { lat: person.death.location.latitude, lng: person.death.location.longitude }
+      : null;
+    const coords = baseCoords ? this.jitterCoordinates(baseCoords) : null;
+
     // Create profile with required + optional fields
     await this.prisma.profile.create({
       data: {
@@ -361,9 +370,9 @@ export class InseeSyncService implements OnModuleInit {
         deathPlaceCog: person.death.location?.code || null,
         deathPlaceLabel,
 
-        // Map pin - only set if we have valid coordinates
-        pinLat: person.death.location?.latitude ?? null,
-        pinLng: person.death.location?.longitude ?? null,
+        // Map pin with jitter applied for visual spread
+        pinLat: coords?.lat ?? null,
+        pinLng: coords?.lng ?? null,
 
         // Provenance
         source: ProfileSource.INSEE,
@@ -372,6 +381,22 @@ export class InseeSyncService implements OnModuleInit {
     });
 
     return true;
+  }
+
+  /**
+   * Add small random offset to coordinates to spread markers visually
+   */
+  private jitterCoordinates(coords: {
+    lat: number;
+    lng: number;
+  }): { lat: number; lng: number } {
+    const angle = Math.random() * 2 * Math.PI;
+    const radius = Math.sqrt(Math.random()) * this.SPREAD_RADIUS;
+    
+    return {
+      lat: coords.lat + radius * Math.cos(angle),
+      lng: coords.lng + radius * Math.sin(angle),
+    };
   }
 
   /**

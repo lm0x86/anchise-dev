@@ -87,11 +87,28 @@ export class CreateProfileDto {
   @IsString()
   photoUrl?: string;
 
+  @ApiPropertyOptional({ example: 'https://example.com/cover.jpg', description: 'Cover photo URL' })
+  @IsOptional()
+  @IsString()
+  coverPhotoUrl?: string;
+
+  @ApiPropertyOptional({ example: 'A loving father and passionate gardener', description: 'Short bio' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  bio?: string;
+
   @ApiPropertyOptional({ example: 'A beloved father and grandfather...' })
   @IsOptional()
   @IsString()
   @MaxLength(5000)
   obituary?: string;
+
+  @ApiPropertyOptional({ description: 'Personality notes and description' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  personalityNotes?: string;
 
   @ApiPropertyOptional({ description: 'Service details JSON' })
   @IsOptional()
@@ -173,8 +190,25 @@ export class UpdateProfileDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  coverPhotoUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  bio?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   @MaxLength(5000)
   obituary?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  personalityNotes?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -336,7 +370,16 @@ export class ProfileResponseDto {
   photoUrl: string | null;
 
   @ApiPropertyOptional()
+  coverPhotoUrl: string | null;
+
+  @ApiPropertyOptional()
+  bio: string | null;
+
+  @ApiPropertyOptional()
   obituary: string | null;
+
+  @ApiPropertyOptional()
+  personalityNotes: string | null;
 
   @ApiPropertyOptional()
   serviceDetails: Record<string, unknown> | null;
@@ -408,5 +451,60 @@ export class BoardProfileDto {
 
   @ApiPropertyOptional()
   photoUrl: string | null;
+}
+
+// ============================================
+// DENSITY DTOs (for zoomed-out map view)
+// ============================================
+
+export class DensityQueryDto {
+  @ApiPropertyOptional({ description: 'Filter by death date from (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by death date to (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @ApiProperty({ description: 'Minimum latitude (south boundary)' })
+  @Type(() => Number)
+  @IsNumber()
+  minLat: number;
+
+  @ApiProperty({ description: 'Maximum latitude (north boundary)' })
+  @Type(() => Number)
+  @IsNumber()
+  maxLat: number;
+
+  @ApiProperty({ description: 'Minimum longitude (west boundary)' })
+  @Type(() => Number)
+  @IsNumber()
+  minLng: number;
+
+  @ApiProperty({ description: 'Maximum longitude (east boundary)' })
+  @Type(() => Number)
+  @IsNumber()
+  maxLng: number;
+
+  @ApiPropertyOptional({ description: 'Grid precision in degrees (auto-calculated if not provided)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.1)
+  @Max(5)
+  precision?: number;
+}
+
+export class DensityPointDto {
+  @ApiProperty({ description: 'Center latitude of grid cell' })
+  lat: number;
+
+  @ApiProperty({ description: 'Center longitude of grid cell' })
+  lng: number;
+
+  @ApiProperty({ description: 'Number of profiles in this cell' })
+  count: number;
 }
 
