@@ -11,6 +11,7 @@ import {
   Max,
   MinLength,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { Sex, ProfileSource } from '@prisma/client';
@@ -98,6 +99,12 @@ export class CreateProfileDto {
   @MaxLength(500)
   bio?: string;
 
+  @ApiPropertyOptional({ example: 'A life lived with purpose and grace', description: 'Short epitaph displayed on profile' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  epitaph?: string;
+
   @ApiPropertyOptional({ example: 'A beloved father and grandfather...' })
   @IsOptional()
   @IsString()
@@ -182,21 +189,29 @@ export class UpdateProfileDto {
   @Max(180)
   pinLng?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true })
   @IsOptional()
+  @ValidateIf((o) => o.photoUrl !== null)
   @IsString()
-  photoUrl?: string;
+  photoUrl?: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true })
   @IsOptional()
+  @ValidateIf((o) => o.coverPhotoUrl !== null)
   @IsString()
-  coverPhotoUrl?: string;
+  coverPhotoUrl?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @MaxLength(500)
   bio?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  epitaph?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -374,6 +389,9 @@ export class ProfileResponseDto {
 
   @ApiPropertyOptional()
   bio: string | null;
+
+  @ApiPropertyOptional()
+  epitaph: string | null;
 
   @ApiPropertyOptional()
   obituary: string | null;

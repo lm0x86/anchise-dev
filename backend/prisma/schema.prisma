@@ -27,7 +27,6 @@ model User {
   tributes     Tribute[]
   partnerUsers PartnerUser[]
   memories     Memory[]
-  prayers      Prayer[]
 
   @@map("users")
 }
@@ -133,6 +132,7 @@ model Profile {
   photoUrl       String? @map("photo_url")
   coverPhotoUrl  String? @map("cover_photo_url")
   bio            String? @db.Text
+  epitaph        String? @db.VarChar(300)
   obituary       String? @db.Text
   serviceDetails Json?   @map("service_details")
   
@@ -156,6 +156,7 @@ model Profile {
   timelineEvents TimelineEvent[]
   memories       Memory[]
   albums         Album[]
+  mediaItems     MediaItem[]
   
   // Relations - Values
   values         ProfileValue[]
@@ -168,10 +169,10 @@ model Profile {
   achievements   Achievement[]
   causes         Cause[]
   creations      Creation[]
-  futureMessage  FutureMessage?
+  futureMessages FutureMessage[]
   
-  // Relations - Memorial
-  prayers        Prayer[]
+  // Relations - Stats
+  stats          ProfileStat[]
 
   // Indexes for performance
   @@index([deathDate])
@@ -252,15 +253,6 @@ enum CreationType {
   OTHER
 }
 
-enum PrayerSymbol {
-  CANDLE
-  STAR
-  FLOWER
-  HEART
-  DOVE
-  CROSS
-}
-
 enum ContentStatus {
   PENDING
   APPROVED
@@ -309,21 +301,24 @@ enum TributeStatus {
 // ============================================
 
 model TimelineEvent {
-  id          String   @id @default(cuid())
-  profileId   String   @map("profile_id")
+  id          String    @id @default(cuid())
+  profileId   String    @map("profile_id")
   title       String
-  description String?  @db.Text
-  date        DateTime @db.Date
-  mediaUrl    String?  @map("media_url")
-  sortOrder   Int      @default(0) @map("sort_order")
+  description String?   @db.Text
+  date        DateTime  @db.Date
+  endDate     DateTime? @map("end_date") @db.Date
+  mediaUrl    String?   @map("media_url")
+  isFeatured  Boolean   @default(false) @map("is_featured")
+  sortOrder   Int       @default(0) @map("sort_order")
   
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
   
-  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
   
   @@index([profileId, date])
   @@index([profileId, sortOrder])
+  @@index([profileId, isFeatured])
   @@map("timeline_events")
 }
 
@@ -374,6 +369,7 @@ model Album {
 
 model MediaItem {
   id        String    @id @default(cuid())
+  profileId String?   @map("profile_id")
   albumId   String?   @map("album_id")
   memoryId  String?   @map("memory_id")
   url       String
@@ -383,9 +379,11 @@ model MediaItem {
   
   createdAt DateTime  @default(now()) @map("created_at")
   
+  profile   Profile?  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   album     Album?    @relation(fields: [albumId], references: [id], onDelete: Cascade)
   memory    Memory?   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
   
+  @@index([profileId])
   @@index([albumId])
   @@index([memoryId])
   @@map("media_items")
@@ -428,20 +426,32 @@ model ProfileFavorite {
   @@map("profile_favorites")
 }
 
+enum QuoteCategory {
+  GENERAL
+  ON_WORK
+  ON_LOVE
+  ON_FAMILY
+  ON_ADVERSITY
+  ON_FRIENDSHIP
+  ON_LIFE
+  ON_FAITH
+}
+
 model ProfileQuote {
-  id          String   @id @default(cuid())
-  profileId   String   @map("profile_id")
-  text        String   @db.Text
+  id          String         @id @default(cuid())
+  profileId   String         @map("profile_id")
+  text        String         @db.Text
   attribution String?
-  audioUrl    String?  @map("audio_url")
-  sortOrder   Int      @default(0) @map("sort_order")
+  category    QuoteCategory  @default(GENERAL)
+  audioUrl    String?        @map("audio_url")
+  sortOrder   Int            @default(0) @map("sort_order")
   
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
   
-  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile     Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
   
-  @@index([profileId])
+  @@index([profileId, category])
   @@map("profile_quotes")
 }
 
@@ -488,6 +498,7 @@ model Achievement {
   description String?             @db.Text
   category    AchievementCategory
   date        DateTime?           @db.Date
+  endDate     DateTime?           @map("end_date") @db.Date
   mediaUrl    String?             @map("media_url")
   sortOrder   Int                 @default(0) @map("sort_order")
   
@@ -538,48 +549,42 @@ model Creation {
 }
 
 model FutureMessage {
+  id          String   @id @default(cuid())
+  profileId   String   @map("profile_id")
+  recipientName String? @map("recipient_name") @db.VarChar(200)
+  content     String?  @db.Text
+  audioUrl    String?  @map("audio_url")
+  videoUrl    String?  @map("video_url")
+  isPinned    Boolean  @default(false) @map("is_pinned")
+  sortOrder   Int      @default(0) @map("sort_order")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId])
+  @@map("future_messages")
+}
+
+// ============================================
+// PROFILE STATS (Custom key-value pairs)
+// ============================================
+
+model ProfileStat {
   id        String   @id @default(cuid())
-  profileId String   @unique @map("profile_id")
-  content   String?  @db.Text
-  audioUrl  String?  @map("audio_url")
-  videoUrl  String?  @map("video_url")
-  isPinned  Boolean  @default(true) @map("is_pinned")
+  profileId String   @map("profile_id")
+  label     String   @db.VarChar(100)
+  value     String   @db.VarChar(50)
+  sortOrder Int      @default(0) @map("sort_order")
   
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   
   profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   
-  @@map("future_messages")
-}
-
-// ============================================
-// MEMORIAL - PRAYERS
-// ============================================
-
-model Prayer {
-  id          String        @id @default(cuid())
-  profileId   String        @map("profile_id")
-  authorId    String        @map("author_id")
-  content     String?       @db.Text
-  audioUrl    String?       @map("audio_url")
-  symbol      PrayerSymbol?
-  visibility  Visibility    @default(PUBLIC)
-  status      ContentStatus @default(PENDING)
-  
-  // Moderation
-  moderatedBy String?       @map("moderated_by")
-  moderatedAt DateTime?     @map("moderated_at")
-  
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-  
-  profile     Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  author      User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
-  @@index([profileId, status])
-  @@index([authorId])
-  @@map("prayers")
+  @@index([profileId])
+  @@map("profile_stats")
 }
 
 // ============================================

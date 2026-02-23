@@ -1,36 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { format } from 'date-fns';
 import Link from 'next/link';
-import { 
-  MapPin, 
-  Calendar, 
-  Heart, 
-  ChevronLeft, 
+import {
+  ChevronLeft,
   Send,
   User as UserIcon,
   BadgeCheck,
   Loader2,
   AlertCircle,
-  Share2,
-  Copy,
+  Heart,
   Flower2,
-  BookOpen,
-  Image as ImageIcon,
-  Clock,
-  Church,
+  MapPin,
+  Calendar,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { profilesApi, tributesApi, type Profile, type Tribute } from '@/lib/api';
+import { profilesApi, profileContentApi, tributesApi, type Profile, type Tribute } from '@/lib/api';
 import { useAuthStore, useAccessToken } from '@/store/auth';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { MosaicTab } from './components/mosaic-tab';
+import { StoryTab } from './components/story-tab';
+import { LegacyTab } from './components/legacy-tab';
+
+type TabId = 'mosaic' | 'story' | 'people' | 'legacy';
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'mosaic', label: 'Mosaic' },
+  { id: 'story', label: 'My Story' },
+  { id: 'people', label: 'My People' },
+  { id: 'legacy', label: 'Legacy' },
+];
 
 function calculateAge(birthDate: string, deathDate: string): number | null {
   if (!birthDate) return null;
@@ -53,23 +57,23 @@ function formatDate(dateStr: string): string {
 }
 
 function TributeCard({ tribute }: { tribute: Tribute }) {
-  const authorName = tribute.author.displayName || 
-    `${tribute.author.firstName} ${tribute.author.lastName}`;
-  
+  const authorName =
+    tribute.author.displayName || `${tribute.author.firstName} ${tribute.author.lastName}`;
+
   return (
-    <div className="p-5 bg-card/50 backdrop-blur border border-border/50 rounded-xl">
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <UserIcon className="w-5 h-5 text-primary" />
+    <div className="p-4 md:p-5 bg-card/50 backdrop-blur border border-border/50 rounded-xl">
+      <div className="flex items-start gap-3 md:gap-4">
+        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <UserIcon className="w-4 h-4 md:w-5 md:h-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="font-medium">{authorName}</span>
-            <span className="text-sm text-muted-foreground">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className="font-medium text-sm md:text-base">{authorName}</span>
+            <span className="text-xs md:text-sm text-muted-foreground">
               {format(new Date(tribute.createdAt), 'MMM d, yyyy')}
             </span>
           </div>
-          <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">
+          <p className="text-sm md:text-base text-muted-foreground whitespace-pre-wrap leading-relaxed">
             {tribute.content}
           </p>
         </div>
@@ -78,7 +82,13 @@ function TributeCard({ tribute }: { tribute: Tribute }) {
   );
 }
 
-function AddTributeForm({ profileId, onSuccess }: { profileId: string; onSuccess: () => void }) {
+function AddTributeForm({
+  profileId,
+  onSuccess,
+}: {
+  profileId: string;
+  onSuccess: () => void;
+}) {
   const t = useTranslations('profile');
   const token = useAccessToken();
   const { isAuthenticated } = useAuthStore();
@@ -95,9 +105,8 @@ function AddTributeForm({ profileId, onSuccess }: { profileId: string; onSuccess
       setContent('');
       toast.success(t('tributeSubmitted'));
       onSuccess();
-    } catch (error) {
+    } catch {
       toast.error(t('tributeError'));
-      console.error('Failed to submit tribute:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -116,24 +125,22 @@ function AddTributeForm({ profileId, onSuccess }: { profileId: string; onSuccess
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <Textarea
         placeholder={t('tributePlaceholder')}
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        rows={4}
+        rows={3}
         maxLength={2000}
-        className="resize-none bg-card/50"
+        className="resize-none bg-card/50 text-sm md:text-base"
       />
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">
-          {content.length}/2000
-        </span>
-        <Button type="submit" disabled={!content.trim() || isSubmitting}>
+        <span className="text-xs text-muted-foreground">{content.length}/2000</span>
+        <Button size="sm" type="submit" disabled={!content.trim() || isSubmitting}>
           {isSubmitting ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
           ) : (
-            <Send className="w-4 h-4 mr-2" />
+            <Send className="w-3.5 h-3.5 mr-1.5" />
           )}
           {t('sendCondolence')}
         </Button>
@@ -142,21 +149,149 @@ function AddTributeForm({ profileId, onSuccess }: { profileId: string; onSuccess
   );
 }
 
+function HeroSection({ profile }: { profile: Profile }) {
+  const t = useTranslations('profile');
+  const age = profile.birthDate ? calculateAge(profile.birthDate, profile.deathDate) : null;
+  const isVerified = !!profile.partnerId;
+
+  return (
+    <section className="relative pt-8 md:pt-12 pb-8 md:pb-12">
+      {/* Night sky background */}
+      <div
+        className="absolute inset-0 bg-center"
+        style={{ backgroundImage: "url('/profile/memorial_sky_v3.png')" }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-transparent to-background" />
+
+      <div className="relative z-10 container mx-auto px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          {/* Avatar */}
+          <div className="mb-4 md:mb-6">
+            <div className="w-24 h-24 md:w-36 md:h-36 lg:w-44 lg:h-44 rounded-full border-[3px] md:border-4 border-primary overflow-hidden mx-auto shadow-[0_0_40px_rgba(201,169,110,0.15)]">
+              {profile.photoUrl ? (
+                <img
+                  src={profile.photoUrl}
+                  alt={`${profile.firstName} ${profile.lastName}`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-primary/20 flex items-center justify-center">
+                  <span className="text-2xl md:text-5xl lg:text-6xl font-serif font-bold text-primary">
+                    {getInitials(profile.firstName, profile.lastName)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Name */}
+          <h1 className="font-serif text-2xl md:text-4xl lg:text-5xl font-semibold mb-2 md:mb-3">
+            {profile.firstName} {profile.lastName}
+          </h1>
+
+          {/* Dates - compact on mobile, full on desktop */}
+          <div className="flex flex-wrap items-center justify-center gap-x-4 md:gap-x-6 gap-y-1 text-muted-foreground mb-2 md:mb-3">
+            {profile.birthDate && (
+              <span className="flex items-center gap-1.5 text-xs md:text-sm">
+                <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4 hidden md:inline-block" />
+                <span className="md:hidden">{new Date(profile.birthDate).getFullYear()}</span>
+                <span className="hidden md:inline">{formatDate(profile.birthDate)}</span>
+              </span>
+            )}
+            <span className="flex items-center gap-1.5 text-xs md:text-sm">
+              <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4 hidden md:inline-block" />
+              <span className="md:hidden">
+                {profile.birthDate && '– '}{new Date(profile.deathDate).getFullYear()}
+              </span>
+              <span className="hidden md:inline">{formatDate(profile.deathDate)}</span>
+            </span>
+            {age !== null && (
+              <span className="text-xs md:text-sm">({age} {t('yearsOld')})</span>
+            )}
+          </div>
+
+          {/* Location */}
+          {profile.deathPlaceLabel && (
+            <div className="flex items-center justify-center gap-1.5 text-muted-foreground mb-3 md:mb-4">
+              <MapPin className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              <span className="text-xs md:text-sm">{profile.deathPlaceLabel}</span>
+            </div>
+          )}
+
+          {/* Epitaph */}
+          {profile.epitaph && (
+            <p className="font-serif italic text-sm md:text-base lg:text-lg text-primary mb-3 md:mb-4 leading-relaxed max-w-lg mx-auto">
+              &ldquo;{profile.epitaph}&rdquo;
+            </p>
+          )}
+
+          {/* Verified badge */}
+          {isVerified && profile.partnerName && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-[10px] md:text-xs">
+              <BadgeCheck className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              {t('managedBy', { partner: profile.partnerName })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Decorative divider */}
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+    </section>
+  );
+}
+
+function TabBar({
+  activeTab,
+  onTabChange,
+}: {
+  activeTab: TabId;
+  onTabChange: (tab: TabId) => void;
+}) {
+  return (
+    <div className="flex border-b border-white/6 sticky top-0 z-30 bg-background max-w-4xl mx-auto w-full">
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => onTabChange(tab.id)}
+          className={`flex-1 py-2.5 md:py-3.5 text-[11px] md:text-sm border-b-2 transition-all ${
+            activeTab === tab.id
+              ? 'text-primary font-semibold border-primary'
+              : 'text-muted-foreground border-transparent hover:text-foreground/70'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const params = useParams();
   const slug = params.slug as string;
   const t = useTranslations('profile');
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<TabId>('mosaic');
+  const tributesRef = useRef<HTMLDivElement>(null);
 
-  // Fetch profile
-  const { data: profile, isLoading: isLoadingProfile, error: profileError } = useQuery({
+  const {
+    data: profile,
+    isLoading: isLoadingProfile,
+    error: profileError,
+  } = useQuery({
     queryKey: ['profile', slug],
     queryFn: () => profilesApi.get(slug),
     enabled: !!slug,
   });
 
-  // Fetch tributes
-  const { data: tributesData, isLoading: isLoadingTributes } = useQuery({
+  const { data: content, isLoading: isLoadingContent } = useQuery({
+    queryKey: ['profile-content', profile?.id],
+    queryFn: () => profileContentApi.getPublic(profile!.id),
+    enabled: !!profile?.id,
+  });
+
+  const { data: tributesData } = useQuery({
     queryKey: ['tributes', profile?.id],
     queryFn: () => tributesApi.getByProfile(profile!.id, { limit: 50 }),
     enabled: !!profile?.id,
@@ -164,23 +299,11 @@ export default function ProfilePage() {
 
   const handleTributeSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['tributes', profile?.id] });
+    queryClient.invalidateQueries({ queryKey: ['profile-content', profile?.id] });
   };
 
-  const handleShare = async () => {
-    const url = window.location.href;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${profile?.firstName} ${profile?.lastName} - Memorial`,
-          url,
-        });
-      } catch {
-        // User cancelled or error
-      }
-    } else {
-      navigator.clipboard.writeText(url);
-      toast.success(t('linkCopied'));
-    }
+  const scrollToTributes = () => {
+    tributesRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   if (isLoadingProfile) {
@@ -213,218 +336,104 @@ export default function ProfilePage() {
     );
   }
 
-  const age = profile.birthDate ? calculateAge(profile.birthDate, profile.deathDate) : null;
   const tributes = tributesData?.tributes || [];
-  const isVerified = !!profile.partnerId;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-b from-primary/5 via-primary/10 to-background pt-8 pb-24">
-        {/* Back button */}
-        <div className="container mx-auto px-4 mb-8">
-          <Link 
-            href="/board" 
-            className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            {t('backToBoard')}
-          </Link>
-        </div>
 
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center">
-            {/* Photo */}
-            <div className="mb-6">
-              {profile.photoUrl ? (
-                <img 
-                  src={profile.photoUrl} 
-                  alt={`${profile.firstName} ${profile.lastName}`}
-                  className="w-40 h-40 md:w-48 md:h-48 rounded-full object-cover border-4 border-background shadow-2xl mx-auto"
-                />
-              ) : (
-                <div className="w-40 h-40 md:w-48 md:h-48 rounded-full bg-card border-4 border-background shadow-2xl flex items-center justify-center mx-auto">
-                  <span className="text-5xl md:text-6xl font-serif text-primary">
-                    {getInitials(profile.firstName, profile.lastName)}
-                  </span>
-                </div>
-              )}
-            </div>
+      {/* Hero - full width */}
+      <HeroSection profile={profile} />
 
-            {/* Name */}
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-semibold mb-3">
-              {profile.firstName} {profile.lastName}
-            </h1>
+      {/* Tab Bar */}
+      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
-            {/* Dates */}
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-muted-foreground mb-4">
-              {profile.birthDate && (
-                <span className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  {formatDate(profile.birthDate)}
-                </span>
-              )}
-              <span className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                {formatDate(profile.deathDate)}
-              </span>
-              {age !== null && (
-                <span className="text-sm">({age} {t('yearsOld')})</span>
-              )}
-            </div>
-
-            {/* Location */}
-            {profile.deathPlaceLabel && (
-              <div className="flex items-center justify-center gap-2 text-muted-foreground mb-6">
-                <MapPin className="w-4 h-4" />
-                {profile.deathPlaceLabel}
-              </div>
-            )}
-
-            {/* Verified badge */}
-            {isVerified && profile.partnerName && (
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full text-sm mb-6">
-                <BadgeCheck className="w-4 h-4" />
-                {t('managedBy', { partner: profile.partnerName })}
-              </div>
-            )}
-
-            {/* Action buttons */}
-            <div className="flex flex-wrap justify-center gap-3">
-              <Button variant="outline" onClick={handleShare}>
-                <Share2 className="w-4 h-4 mr-2" />
-                {t('shareMemorial')}
-              </Button>
-              <a href="#tributes">
-                <Button>
-                  <Flower2 className="w-4 h-4 mr-2" />
-                  {t('leaveCondolence')}
-                </Button>
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Decorative divider */}
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
-      </section>
-
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl mx-auto space-y-12">
-
-          {/* Life Story / Obituary */}
-          {profile.obituary && (
-            <section>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <BookOpen className="w-5 h-5 text-primary" />
-                </div>
-                <h2 className="text-2xl font-serif font-semibold">{t('lifeStory')}</h2>
-              </div>
-              <div className="bg-card/50 border border-border/50 rounded-xl p-6 md:p-8">
-                <div className="prose prose-invert prose-lg max-w-none">
-                  <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed text-lg">
-                    {profile.obituary}
-                  </p>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Service Details */}
-          {profile.serviceDetails && Object.keys(profile.serviceDetails).length > 0 && (
-            <section>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Church className="w-5 h-5 text-primary" />
-                </div>
-                <h2 className="text-2xl font-serif font-semibold">{t('serviceDetails')}</h2>
-              </div>
-              <div className="bg-card/50 border border-border/50 rounded-xl p-6 md:p-8">
-                {/* For now, display as formatted JSON - can be enhanced later */}
-                <div className="space-y-4">
-                  {Object.entries(profile.serviceDetails).map(([key, value]) => (
-                    <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span>
-                      <span className="text-muted-foreground">{String(value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Photo Gallery Placeholder */}
-          {!profile.obituary && !profile.serviceDetails && (
-            <section className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-                <ImageIcon className="w-8 h-8 text-primary/50" />
-              </div>
-              <h3 className="text-lg font-medium mb-2">{t('helpBuildMemorial')}</h3>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                {t('helpBuildMemorialDescription')}
-              </p>
-            </section>
-          )}
-
-          {/* Tributes Section */}
-          <section id="tributes">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Heart className="w-5 h-5 text-primary" />
-              </div>
-              <h2 className="text-2xl font-serif font-semibold">
-                {t('condolences')}
-                {tributes.length > 0 && (
-                  <span className="text-lg font-normal text-muted-foreground ml-2">
-                    ({tributes.length})
-                  </span>
-                )}
-              </h2>
-            </div>
-
-            {/* Add tribute form */}
-            <div className="bg-card/30 border border-border/50 rounded-xl p-6 mb-6">
-              <h3 className="font-medium mb-4">{t('shareYourMemory')}</h3>
-              <AddTributeForm profileId={profile.id} onSuccess={handleTributeSuccess} />
-            </div>
-
-            {/* Tributes list */}
-            {isLoadingTributes ? (
-              <div className="flex justify-center py-12">
+      {/* Tab Content - constrained width */}
+      <div className="flex-1 max-w-4xl mx-auto w-full">
+        {activeTab === 'mosaic' && (
+          <div className="animate-in fade-in duration-400">
+            {isLoadingContent ? (
+              <div className="flex justify-center py-16">
                 <Loader2 className="w-6 h-6 text-primary animate-spin" />
               </div>
-            ) : tributes.length === 0 ? (
-              <div className="text-center py-12 bg-card/30 border border-border/50 rounded-xl">
-                <Flower2 className="w-12 h-12 mx-auto mb-3 text-primary/30" />
-                <p className="text-muted-foreground">{t('noCondolencesYet')}</p>
-                <p className="text-sm text-muted-foreground/70">{t('beFirstToShare')}</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {tributes.map((tribute) => (
-                  <TributeCard key={tribute.id} tribute={tribute} />
-                ))}
-              </div>
-            )}
-          </section>
+            ) : content ? (
+              <MosaicTab
+                profile={profile}
+                content={content}
+                tributeCount={tributes.length}
+                onLeaveCondolence={scrollToTributes}
+              />
+            ) : null}
 
-        </div>
+            {/* Tributes Section */}
+            <div ref={tributesRef} className="px-2 md:px-4 pb-8">
+              <div className="bg-card/30 border border-border/50 rounded-xl p-4 md:p-6 mb-4">
+                <h3 className="font-medium text-sm md:text-base mb-3">{t('shareYourMemory')}</h3>
+                <AddTributeForm profileId={profile.id} onSuccess={handleTributeSuccess} />
+              </div>
+
+              {tributes.length > 0 && (
+                <div className="space-y-3 md:space-y-4">
+                  {tributes.map((tribute) => (
+                    <TributeCard key={tribute.id} tribute={tribute} />
+                  ))}
+                </div>
+              )}
+
+              {tributes.length === 0 && (
+                <div className="text-center py-8 md:py-12 bg-card/30 border border-border/50 rounded-xl">
+                  <Flower2 className="w-10 h-10 md:w-12 md:h-12 mx-auto mb-2 text-primary/30" />
+                  <p className="text-muted-foreground text-sm md:text-base">{t('noCondolencesYet')}</p>
+                  <p className="text-muted-foreground/60 text-xs md:text-sm mt-1">{t('beFirstToShare')}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'story' && (
+          <div className="animate-in fade-in duration-400">
+            {isLoadingContent ? (
+              <div className="flex justify-center py-16">
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              </div>
+            ) : content ? (
+              <StoryTab profile={profile} content={content} />
+            ) : null}
+          </div>
+        )}
+
+        {activeTab === 'people' && (
+          <div className="animate-in fade-in duration-400 p-4 md:p-6">
+            <div className="text-center py-16 md:py-24">
+              <div className="text-3xl md:text-4xl mb-3 opacity-30">&#128106;</div>
+              <p className="text-muted-foreground text-sm md:text-base font-medium">My People</p>
+              <p className="text-muted-foreground/60 text-xs md:text-sm mt-1">Coming soon</p>
+            </div>
+          </div>
+        )}
+
+          {activeTab === 'legacy' && (
+            <div className="animate-in fade-in duration-400">
+              {isLoadingContent ? (
+                <div className="flex justify-center py-16">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                </div>
+              ) : content ? (
+                <LegacyTab profile={profile} content={content} />
+              ) : null}
+            </div>
+          )}
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-border py-8 mt-auto">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-muted-foreground text-sm">
-            {t('inLovingMemory', { name: `${profile.firstName} ${profile.lastName}` })}
-          </p>
-          <p className="text-muted-foreground/60 text-xs mt-2">
-            {t('memorialCreatedWith')}
-          </p>
-        </div>
+      <footer className="border-t border-border py-6 md:py-8 text-center">
+        <p className="text-muted-foreground text-xs md:text-sm">
+          {t('inLovingMemory', { name: `${profile.firstName} ${profile.lastName}` })}
+        </p>
+        <p className="text-muted-foreground/60 text-[10px] md:text-xs mt-1">
+          {t('memorialCreatedWith')}
+        </p>
       </footer>
     </div>
   );

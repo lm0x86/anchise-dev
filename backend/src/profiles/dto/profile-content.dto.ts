@@ -12,6 +12,7 @@ import {
   MinLength,
   MaxLength,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import {
@@ -22,7 +23,7 @@ import {
   AchievementCategory,
   CauseType,
   CreationType,
-  PrayerSymbol,
+  QuoteCategory,
   Visibility,
   ContentStatus,
 } from '@prisma/client';
@@ -48,10 +49,20 @@ export class CreateTimelineEventDto {
   @IsDateString()
   date: string;
 
+  @ApiPropertyOptional({ example: '1995-06-15' })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
   @ApiPropertyOptional({ example: 'https://example.com/photo.jpg' })
   @IsOptional()
   @IsString()
   mediaUrl?: string;
+
+  @ApiPropertyOptional({ default: false, description: 'Show in Highlights tab' })
+  @IsOptional()
+  @IsBoolean()
+  isFeatured?: boolean;
 
   @ApiPropertyOptional({ example: 0 })
   @IsOptional()
@@ -69,21 +80,34 @@ export class UpdateTimelineEventDto {
   @MaxLength(200)
   title?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true })
   @IsOptional()
+  @ValidateIf((o) => o.description !== null)
   @IsString()
   @MaxLength(2000)
-  description?: string;
+  description?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
   date?: string;
 
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((o) => o.endDate !== null)
+  @IsDateString()
+  endDate?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((o) => o.mediaUrl !== null)
+  @IsString()
+  mediaUrl?: string | null;
+
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
-  mediaUrl?: string;
+  @IsBoolean()
+  isFeatured?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -110,7 +134,13 @@ export class TimelineEventResponseDto {
   date: Date;
 
   @ApiPropertyOptional()
+  endDate: Date | null;
+
+  @ApiPropertyOptional()
   mediaUrl: string | null;
+
+  @ApiProperty()
+  isFeatured: boolean;
 
   @ApiProperty()
   sortOrder: number;
@@ -318,6 +348,9 @@ export class MediaItemResponseDto {
   id: string;
 
   @ApiPropertyOptional()
+  profileId: string | null;
+
+  @ApiPropertyOptional()
   albumId: string | null;
 
   @ApiPropertyOptional()
@@ -508,6 +541,11 @@ export class CreateProfileQuoteDto {
   @MaxLength(200)
   attribution?: string;
 
+  @ApiPropertyOptional({ enum: QuoteCategory, default: QuoteCategory.GENERAL })
+  @IsOptional()
+  @IsEnum(QuoteCategory)
+  category?: QuoteCategory;
+
   @ApiPropertyOptional({ example: 'https://example.com/audio.mp3' })
   @IsOptional()
   @IsString()
@@ -535,6 +573,11 @@ export class UpdateProfileQuoteDto {
   @MaxLength(200)
   attribution?: string;
 
+  @ApiPropertyOptional({ enum: QuoteCategory })
+  @IsOptional()
+  @IsEnum(QuoteCategory)
+  category?: QuoteCategory;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -560,6 +603,9 @@ export class ProfileQuoteResponseDto {
 
   @ApiPropertyOptional()
   attribution: string | null;
+
+  @ApiProperty({ enum: QuoteCategory })
+  category: QuoteCategory;
 
   @ApiPropertyOptional()
   audioUrl: string | null;
@@ -736,6 +782,11 @@ export class CreateAchievementDto {
   @IsDateString()
   date?: string;
 
+  @ApiPropertyOptional({ example: '2023-12-15' })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
   @ApiPropertyOptional({ example: 'https://example.com/award.jpg' })
   @IsOptional()
   @IsString()
@@ -775,6 +826,11 @@ export class UpdateAchievementDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
   mediaUrl?: string;
 
@@ -804,6 +860,9 @@ export class AchievementResponseDto {
 
   @ApiPropertyOptional()
   date: Date | null;
+
+  @ApiPropertyOptional()
+  endDate: Date | null;
 
   @ApiPropertyOptional()
   mediaUrl: string | null;
@@ -1026,6 +1085,12 @@ export class CreationResponseDto {
 // ============================================
 
 export class CreateFutureMessageDto {
+  @ApiPropertyOptional({ example: 'To Sofia' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  recipientName?: string;
+
   @ApiPropertyOptional({ example: 'Dear family, I want you to know how much I love you...' })
   @IsOptional()
   @IsString()
@@ -1042,13 +1107,26 @@ export class CreateFutureMessageDto {
   @IsString()
   videoUrl?: string;
 
-  @ApiPropertyOptional({ default: true })
+  @ApiPropertyOptional({ default: false })
   @IsOptional()
   @IsBoolean()
   isPinned?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  sortOrder?: number;
 }
 
 export class UpdateFutureMessageDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  recipientName?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -1069,6 +1147,13 @@ export class UpdateFutureMessageDto {
   @IsOptional()
   @IsBoolean()
   isPinned?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  sortOrder?: number;
 }
 
 export class FutureMessageResponseDto {
@@ -1077,6 +1162,9 @@ export class FutureMessageResponseDto {
 
   @ApiProperty()
   profileId: string;
+
+  @ApiPropertyOptional()
+  recipientName: string | null;
 
   @ApiPropertyOptional()
   content: string | null;
@@ -1091,6 +1179,9 @@ export class FutureMessageResponseDto {
   isPinned: boolean;
 
   @ApiProperty()
+  sortOrder: number;
+
+  @ApiProperty()
   createdAt: Date;
 
   @ApiProperty()
@@ -1098,33 +1189,54 @@ export class FutureMessageResponseDto {
 }
 
 // ============================================
-// PRAYER DTOs
+// PROFILE STAT DTOs
 // ============================================
 
-export class CreatePrayerDto {
-  @ApiPropertyOptional({ example: 'Wishing peace and comfort to the family' })
-  @IsOptional()
+export class CreateProfileStatDto {
+  @ApiProperty({ example: 'Patents' })
   @IsString()
-  @MaxLength(2000)
-  content?: string;
+  @MinLength(1)
+  @MaxLength(100)
+  label: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/prayer-audio.mp3' })
-  @IsOptional()
+  @ApiProperty({ example: '12' })
   @IsString()
-  audioUrl?: string;
+  @MinLength(1)
+  @MaxLength(50)
+  value: string;
 
-  @ApiPropertyOptional({ enum: PrayerSymbol })
+  @ApiPropertyOptional()
   @IsOptional()
-  @IsEnum(PrayerSymbol)
-  symbol?: PrayerSymbol;
-
-  @ApiPropertyOptional({ enum: Visibility, default: Visibility.PUBLIC })
-  @IsOptional()
-  @IsEnum(Visibility)
-  visibility?: Visibility;
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  sortOrder?: number;
 }
 
-export class PrayerResponseDto {
+export class UpdateProfileStatDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  label?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(50)
+  value?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  sortOrder?: number;
+}
+
+export class ProfileStatResponseDto {
   @ApiProperty()
   id: string;
 
@@ -1132,36 +1244,19 @@ export class PrayerResponseDto {
   profileId: string;
 
   @ApiProperty()
-  authorId: string;
+  label: string;
 
-  @ApiPropertyOptional()
-  content: string | null;
+  @ApiProperty()
+  value: string;
 
-  @ApiPropertyOptional()
-  audioUrl: string | null;
-
-  @ApiPropertyOptional({ enum: PrayerSymbol })
-  symbol: PrayerSymbol | null;
-
-  @ApiProperty({ enum: Visibility })
-  visibility: Visibility;
-
-  @ApiProperty({ enum: ContentStatus })
-  status: ContentStatus;
+  @ApiProperty()
+  sortOrder: number;
 
   @ApiProperty()
   createdAt: Date;
 
   @ApiProperty()
   updatedAt: Date;
-
-  @ApiPropertyOptional()
-  author?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    displayName: string | null;
-  };
 }
 
 // ============================================
@@ -1200,6 +1295,13 @@ export class FavoriteQueryDto extends ContentQueryDto {
   @IsOptional()
   @IsEnum(FavoriteCategory)
   category?: FavoriteCategory;
+}
+
+export class QuoteQueryDto extends ContentQueryDto {
+  @ApiPropertyOptional({ enum: QuoteCategory })
+  @IsOptional()
+  @IsEnum(QuoteCategory)
+  category?: QuoteCategory;
 }
 
 export class AchievementQueryDto extends ContentQueryDto {
@@ -1247,9 +1349,9 @@ export class ProfileContentResponseDto {
   @ApiPropertyOptional({ type: [CreationResponseDto] })
   creations?: CreationResponseDto[];
 
-  @ApiPropertyOptional({ type: FutureMessageResponseDto })
-  futureMessage?: FutureMessageResponseDto | null;
+  @ApiPropertyOptional({ type: [FutureMessageResponseDto] })
+  futureMessages?: FutureMessageResponseDto[];
 
-  @ApiPropertyOptional({ type: [PrayerResponseDto] })
-  prayers?: PrayerResponseDto[];
+  @ApiPropertyOptional({ type: [ProfileStatResponseDto] })
+  stats?: ProfileStatResponseDto[];
 }

@@ -18,6 +18,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { ProfilesService } from './profiles.service';
+import { ProfileContentService } from './profile-content.service';
 import {
   CreateProfileDto,
   UpdateProfileDto,
@@ -40,6 +41,7 @@ import type { User } from '@prisma/client';
 export class ProfilesController {
   constructor(
     private readonly profilesService: ProfilesService,
+    private readonly profileContentService: ProfileContentService,
     @Inject(forwardRef(() => PartnersService))
     private readonly partnersService: PartnersService,
   ) {}
@@ -67,6 +69,16 @@ export class ProfilesController {
   @ApiResponse({ status: 200, description: 'Density grid points', type: [DensityPointDto] })
   async getDensity(@Query() query: DensityQueryDto): Promise<DensityPointDto[]> {
     return this.profilesService.getDensity(query);
+  }
+
+  @Get(':idOrSlug/content')
+  @ApiOperation({ summary: 'Get all public content for a profile (timeline, media, values, achievements, stats, tributes)' })
+  @ApiParam({ name: 'idOrSlug', description: 'Profile ID or URL slug' })
+  @ApiResponse({ status: 200, description: 'Profile content' })
+  @ApiResponse({ status: 404, description: 'Profile not found' })
+  async getPublicContent(@Param('idOrSlug') idOrSlug: string) {
+    const profile = await this.profilesService.findByIdOrSlug(idOrSlug);
+    return this.profileContentService.getPublicContent(profile.id);
   }
 
   @Get(':idOrSlug')

@@ -126,7 +126,11 @@ export interface Profile {
   pinLng: number;
   source: 'PARTNER' | 'INSEE' | 'MERGED';
   photoUrl: string | null;
+  coverPhotoUrl: string | null;
+  bio: string | null;
+  epitaph: string | null;
   obituary: string | null;
+  personalityNotes: string | null;
   serviceDetails: Record<string, unknown> | null;
   isLocked: boolean;
   partnerId: string | null;
@@ -230,6 +234,78 @@ export const profilesApi = {
 
   update: (id: string, data: Partial<Profile>, token: string) =>
     request<Profile>(`/profiles/${id}`, { method: 'PATCH', body: data, token }),
+};
+
+// ============================================
+// PUBLIC PROFILE CONTENT API
+// ============================================
+
+export interface PublicProfileContent {
+  timelineEvents: {
+    id: string;
+    profileId: string;
+    title: string;
+    description: string | null;
+    date: string;
+    endDate: string | null;
+    mediaUrl: string | null;
+    isFeatured: boolean;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+  }[];
+  media: {
+    id: string;
+    url: string;
+    type: 'IMAGE' | 'VIDEO' | 'AUDIO';
+    caption: string | null;
+    sortOrder: number;
+    createdAt: string;
+  }[];
+  values: {
+    id: string;
+    value: string;
+    meaning: string | null;
+    sortOrder: number;
+  }[];
+  achievements: {
+    id: string;
+    title: string;
+    description: string | null;
+    category: 'PROFESSIONAL' | 'PERSONAL';
+    date: string | null;
+    endDate: string | null;
+    sortOrder: number;
+  }[];
+  stats: {
+    id: string;
+    label: string;
+    value: string;
+    sortOrder: number;
+  }[];
+  tributes: Tribute[];
+  quotes: {
+    id: string;
+    text: string;
+    attribution: string | null;
+    category: 'GENERAL' | 'ON_WORK' | 'ON_LOVE' | 'ON_FAMILY' | 'ON_ADVERSITY' | 'ON_FRIENDSHIP' | 'ON_LIFE' | 'ON_FAITH';
+    audioUrl: string | null;
+    sortOrder: number;
+  }[];
+  futureMessages: {
+    id: string;
+    recipientName: string | null;
+    content: string | null;
+    audioUrl: string | null;
+    videoUrl: string | null;
+    isPinned: boolean;
+    sortOrder: number;
+  }[];
+}
+
+export const profileContentApi = {
+  getPublic: (idOrSlug: string) =>
+    request<PublicProfileContent>(`/profiles/${idOrSlug}/content`),
 };
 
 // ============================================
